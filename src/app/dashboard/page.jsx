@@ -176,7 +176,7 @@ export default function Dashboard() {
       setSmartSwitch(json);
     };
     fetchSwitch();
-  }, [user, transactionsData]);
+  }, [user]);
 
   const [budgetData, setBudgetData] = useState(null);
 
@@ -215,6 +215,13 @@ export default function Dashboard() {
     setLoadingSummaryManually(true);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
+
+      if (!sessionData.session) {
+        setSmartSummary("⚠️ Session expired. Please sign in again.");
+        setSummaryUpdatedAt(null);
+        setLoadingSummaryManually(false);
+        return;
+      }
 
       const res = await fetch("/api/summary-insights", {
         method: "POST",
