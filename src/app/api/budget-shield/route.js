@@ -29,7 +29,7 @@ export async function POST(req) {
             supabase.from("profiles").select("monthly_budget").eq("id", user.id).single()
         ]);
 
-        const totalSpent = expenses.reduce((acc, e) => acc + Number(e.amount), 0);
+        const totalSpent = (expenses || []).reduce((acc, e) => acc + Number(e.amount), 0);
         const budget = profile?.monthly_budget || 2000;
 
         // 3. Projections

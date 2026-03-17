@@ -44,7 +44,7 @@ export default function EditExpenseClient({ id }) {
     };
 
     fetchExpense();
-  }, [id]);
+  }, [id, router]);
 
   const handleUpdate = async (e) => {
     e.preventDefault();

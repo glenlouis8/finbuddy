@@ -28,7 +28,7 @@ export async function POST(req) {
             .order("date", { ascending: false })
             .limit(50);
 
-        const dataForAI = expenses.map(e => ({
+        const dataForAI = (expenses || []).map(e => ({
             category: e.category,
             description: e.description,
             amount: e.amount,

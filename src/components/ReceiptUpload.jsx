@@ -6,6 +6,7 @@ import { UploadCloud, X } from "lucide-react";
 
 export default function ReceiptUpload({ onFileSelect }) {
   const [file, setFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [error, setError] = useState("");
 
   const handleFile = (file) => {
@@ -23,6 +24,9 @@ export default function ReceiptUpload({ onFileSelect }) {
 
     setError("");
     setFile(file);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    const url = file.type !== "application/pdf" ? URL.createObjectURL(file) : null;
+    setPreviewUrl(url);
     onFileSelect(file);
   };
 
@@ -36,6 +40,8 @@ export default function ReceiptUpload({ onFileSelect }) {
   };
 
   const clearFile = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
     setFile(null);
     onFileSelect(null);
   };
@@ -74,7 +80,7 @@ export default function ReceiptUpload({ onFileSelect }) {
               <p className="text-gray-300">{file.name}</p>
             ) : (
               <img
-                src={URL.createObjectURL(file)}
+                src={previewUrl}
                 alt="Receipt Preview"
                 className="max-h-32 mx-auto rounded shadow"
               />

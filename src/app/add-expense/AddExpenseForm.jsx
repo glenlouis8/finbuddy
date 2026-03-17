@@ -46,7 +46,10 @@ export default function AddExpenseForm() {
   const handleFileChange = (file) => {
     if (file) {
       setReceipt(file);
-      setPreviewUrl(URL.createObjectURL(file));
+      setPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(file);
+      });
     }
   };
 

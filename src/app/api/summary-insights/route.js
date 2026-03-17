@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import crypto from "crypto";
 
 export async function POST(req) {
   const authHeader = req.headers.get("Authorization");
@@ -36,12 +37,14 @@ export async function POST(req) {
     .select("*")
     .eq("user_id", user.id);
 
-  if (expenseError || !expenses || expenses.length < 5) {
+  if (expenseError) {
+    console.error("❌ Expense fetch error:", expenseError);
+    return Response.json({ error: "Failed to fetch expenses." }, { status: 500 });
+  }
+
+  if (!expenses || expenses.length < 5) {
     return Response.json(
-      {
-        error:
-          "Not enough data to generate insights. Add at least 5 expense records.",
-      },
+      { error: "Not enough data to generate insights. Add at least 5 expense records." },
       { status: 400 }
     );
   }
@@ -55,7 +58,6 @@ export async function POST(req) {
   }));
 
   const dataString = JSON.stringify(formatted);
-  const crypto = require("crypto");
   const inputHash = crypto.createHash("sha256").update(dataString).digest("hex");
 
   // ✅ 4. Check Semantic Cache (Exact Match First)
@@ -132,9 +134,19 @@ ${dataString}
   });
 
   const gptData = await openaiRes.json();
+
+  if (!openaiRes.ok) {
+    console.error("❌ OpenAI API error:", JSON.stringify(gptData));
+    return Response.json(
+      { error: `OpenAI error: ${gptData?.error?.message || openaiRes.statusText}` },
+      { status: 502 }
+    );
+  }
+
   const summary = gptData?.choices?.[0]?.message?.content;
 
   if (!summary) {
+    console.error("❌ Unexpected OpenAI response shape:", JSON.stringify(gptData));
     return Response.json(
       { error: "Failed to generate summary" },
       { status: 500 }
