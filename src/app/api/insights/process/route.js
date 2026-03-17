@@ -77,7 +77,7 @@ ${receipt.ocr_text}
 
     // 3. Send to OpenAI
     const completion = await openai.chat.completions.create({
-      model: "gpt-4-1106-preview", // OCI-compatible model name if using self-hosted
+      model: "gpt-4o-mini",
       temperature: 0.2,
       messages: [
         { role: "system", content: "You are a personal finance assistant." },
