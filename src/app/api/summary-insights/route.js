@@ -2,81 +2,82 @@ import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
 export async function POST(req) {
-  const authHeader = req.headers.get("Authorization");
-  const token = authHeader?.replace("Bearer ", "");
+  try {
+    const authHeader = req.headers.get("Authorization");
+    const token = authHeader?.replace("Bearer ", "");
 
-  if (!token) {
-    return Response.json({ error: "Missing access token" }, { status: 401 });
-  }
-
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY, // Only for server-side secure ops
-    {
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
+    if (!token) {
+      return Response.json({ error: "Missing access token" }, { status: 401 });
     }
-  );
 
-  // ✅ 1. Get user from token
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // ✅ 2. Fetch expenses
-  const { data: expenses, error: expenseError } = await supabase
-    .from("expenses")
-    .select("*")
-    .eq("user_id", user.id);
-
-  if (expenseError) {
-    console.error("❌ Expense fetch error:", expenseError);
-    return Response.json({ error: "Failed to fetch expenses." }, { status: 500 });
-  }
-
-  if (!expenses || expenses.length < 5) {
-    return Response.json(
-      { error: "Not enough data to generate insights. Add at least 5 expense records." },
-      { status: 400 }
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY, // Only for server-side secure ops
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      }
     );
-  }
 
-  // ✅ 3. Format data & Generate Hash
-  const formatted = expenses.map((e) => ({
-    category: e.category,
-    amount: parseFloat(e.amount),
-    date: e.date,
-    items: e.ocr_parsed?.items || [],
-  }));
+    // ✅ 1. Get user from token
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-  const dataString = JSON.stringify(formatted);
-  const inputHash = crypto.createHash("sha256").update(dataString).digest("hex");
+    if (userError || !user) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  // ✅ 4. Check Semantic Cache (Exact Match First)
-  const { data: cachedSummary, error: cacheError } = await supabase
-    .from("ai_summary_cache")
-    .select("summary_text")
-    .eq("user_id", user.id)
-    .eq("input_hash", inputHash)
-    .single();
+    // ✅ 2. Fetch expenses
+    const { data: expenses, error: expenseError } = await supabase
+      .from("expenses")
+      .select("*")
+      .eq("user_id", user.id);
 
-  if (cachedSummary) {
-    console.log("🚀 [Cache] Exact match found! Skipping OpenAI call.");
-    return Response.json({ summary: cachedSummary.summary_text, cached: true });
-  }
+    if (expenseError) {
+      console.error("❌ Expense fetch error:", expenseError);
+      return Response.json({ error: "Failed to fetch expenses." }, { status: 500 });
+    }
 
-  // ✅ 5. Optional: Semantic Similarity Match (Visualizing similarity)
-  // (In a full implementation, you'd call embeddings API here to find 'close enough' insights)
+    if (!expenses || expenses.length < 5) {
+      return Response.json(
+        { error: "Not enough data to generate insights. Add at least 5 expense records." },
+        { status: 400 }
+      );
+    }
 
-  const prompt = `
+    // ✅ 3. Format data & Generate Hash
+    const formatted = expenses.map((e) => ({
+      category: e.category,
+      amount: parseFloat(e.amount),
+      date: e.date,
+      items: e.ocr_parsed?.items || [],
+    }));
+
+    const dataString = JSON.stringify(formatted);
+    const inputHash = crypto.createHash("sha256").update(dataString).digest("hex");
+
+    // ✅ 4. Check Semantic Cache (Exact Match First)
+    const { data: cachedSummary } = await supabase
+      .from("ai_summary_cache")
+      .select("summary_text")
+      .eq("user_id", user.id)
+      .eq("input_hash", inputHash)
+      .single();
+
+    if (cachedSummary) {
+      console.log("🚀 [Cache] Exact match found! Skipping OpenAI call.");
+      return Response.json({ summary: cachedSummary.summary_text, cached: true });
+    }
+
+    // ✅ 5. Optional: Semantic Similarity Match (Visualizing similarity)
+    // (In a full implementation, you'd call embeddings API here to find 'close enough' insights)
+
+    const prompt = `
 # ROLE
 You are the **FinBuddy Elite Wealth Strategist**. Your mission is to transform raw spending data into a sophisticated, high-performance financial roadmap. You speak with the authority of a Hedge Fund Manager but the empathy of a close mentor.
 
@@ -92,14 +93,14 @@ ${dataString}
     - Identify the **Top 3 High-Burn Categories**.
     - For the #1 category, drill down into the **Items**. (e.g., "You spent $200 on 'Dining Out', but $120 of that was specifically on 'Late-Night Snacks/Fast Food'").
 3.  **Behavioral Coaching (The "Silent Leak")**: Look for high-frequency, low-value items (e.g., recurring $5 coffees, convenience store trips). Calculate the "Annualized Cost" of this habit to create a "Shock Value" insight.
-4.  **Strategic Directives (Power Moves)**: Provide two highly specific, actionable "Wealth Moves." 
+4.  **Strategic Directives (Power Moves)**: Provide two highly specific, actionable "Wealth Moves."
     - *Bad*: "Spend less on food."
     - *Good*: "Your 'Grocery' spend is heavy on 'Pre-packaged Meals'. Swapping 3 pre-packaged dinners for batch-cooked meals would save you ~$95 this month."
 5.  **Critical Outlier**: Flag the single largest transaction and provide a brief "Necessity Assessment."
 
 # FORMATTING (ReactMarkdown-ready)
 - Use **BOLD** for emphasis and financial figures.
-- Use `> [!TIP]` alert blocks (if supported) or stylized blockquotes.
+- Use \`> [!TIP]\` alert blocks (if supported) or stylized blockquotes.
 - Use bulleted lists for scannability.
 - Strictly under **160 words**.
 
@@ -116,57 +117,67 @@ ${dataString}
 [Tip 2 - Optimization]
 `;
 
-  // ✅ 6. Call OpenAI
-  const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: "You are a financial analyst." },
-        { role: "user", content: prompt },
-      ],
-      temperature: 0.5,
-    }),
-  });
+    // ✅ 6. Call OpenAI
+    let openaiRes;
+    try {
+      openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: "You are a financial analyst." },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.5,
+        }),
+      });
+    } catch (fetchErr) {
+      console.error("❌ OpenAI network error:", fetchErr);
+      return Response.json({ error: "Failed to reach OpenAI. Check your network or API key." }, { status: 502 });
+    }
 
-  const gptData = await openaiRes.json();
+    const gptData = await openaiRes.json();
 
-  if (!openaiRes.ok) {
-    console.error("❌ OpenAI API error:", JSON.stringify(gptData));
-    return Response.json(
-      { error: `OpenAI error: ${gptData?.error?.message || openaiRes.statusText}` },
-      { status: 502 }
-    );
-  }
+    if (!openaiRes.ok) {
+      console.error("❌ OpenAI API error:", JSON.stringify(gptData));
+      return Response.json(
+        { error: `OpenAI error: ${gptData?.error?.message || openaiRes.statusText}` },
+        { status: 502 }
+      );
+    }
 
-  const summary = gptData?.choices?.[0]?.message?.content;
+    const summary = gptData?.choices?.[0]?.message?.content;
 
-  if (!summary) {
-    console.error("❌ Unexpected OpenAI response shape:", JSON.stringify(gptData));
-    return Response.json(
-      { error: "Failed to generate summary" },
-      { status: 500 }
-    );
-  }
+    if (!summary) {
+      console.error("❌ Unexpected OpenAI response shape:", JSON.stringify(gptData));
+      return Response.json(
+        { error: "Failed to generate summary" },
+        { status: 500 }
+      );
+    }
 
-  // ✅ 7. Store in Cache & ai_summary
-  await Promise.all([
-    supabase.from("ai_summary_cache").upsert({
-      user_id: user.id,
-      input_hash: inputHash,
-      summary_text: summary,
-    }),
-    supabase.from("ai_summary").upsert([
-      {
+    // ✅ 7. Store in Cache & ai_summary
+    await Promise.all([
+      supabase.from("ai_summary_cache").upsert({
         user_id: user.id,
+        input_hash: inputHash,
         summary_text: summary,
-      },
-    ], { onConflict: "user_id" })
-  ]);
+      }),
+      supabase.from("ai_summary").upsert([
+        {
+          user_id: user.id,
+          summary_text: summary,
+        },
+      ], { onConflict: "user_id" })
+    ]);
 
-  return Response.json({ summary, cached: false });
+    return Response.json({ summary, cached: false });
+  } catch (err) {
+    console.error("❌ Unhandled summary-insights error:", err);
+    return Response.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
