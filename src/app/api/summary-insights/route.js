@@ -32,11 +32,13 @@ export async function POST(req) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // ✅ 2. Fetch expenses
+    // ✅ 2. Fetch expenses (cap at 50 most recent to avoid token limits)
     const { data: expenses, error: expenseError } = await supabase
       .from("expenses")
       .select("*")
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .order("date", { ascending: false })
+      .limit(50);
 
     if (expenseError) {
       console.error("❌ Expense fetch error:", expenseError);
@@ -78,43 +80,38 @@ export async function POST(req) {
     // (In a full implementation, you'd call embeddings API here to find 'close enough' insights)
 
     const prompt = `
-# ROLE
-You are the **FinBuddy Elite Wealth Strategist**. Your mission is to transform raw spending data into a sophisticated, high-performance financial roadmap. You speak with the authority of a Hedge Fund Manager but the empathy of a close mentor.
-
 # DATASET
-The following JSON contains the user's recent spending history, including individual line items where available. **Identify patterns within the items themselves, not just the categories.**
+The following JSON contains the user's recent spending history, including individual line items where available. Identify patterns within the items themselves, not just the categories.
 
 USER DATA:
 ${dataString}
 
 # CORE ANALYSIS STRATEGY
-1.  **The "Market Sentiment" (Executive Summary)**: Start with a powerful, one-sentence "Status Report" on their financial health. Use a vibrant emoji (🚀, 📈, ⚖️, ⚠️) to set the tone.
-2.  **Granular Profit & Loss (P&L)**:
-    - Identify the **Top 3 High-Burn Categories**.
-    - For the #1 category, drill down into the **Items**. (e.g., "You spent $200 on 'Dining Out', but $120 of that was specifically on 'Late-Night Snacks/Fast Food'").
-3.  **Behavioral Coaching (The "Silent Leak")**: Look for high-frequency, low-value items (e.g., recurring $5 coffees, convenience store trips). Calculate the "Annualized Cost" of this habit to create a "Shock Value" insight.
-4.  **Strategic Directives (Power Moves)**: Provide two highly specific, actionable "Wealth Moves."
-    - *Bad*: "Spend less on food."
-    - *Good*: "Your 'Grocery' spend is heavy on 'Pre-packaged Meals'. Swapping 3 pre-packaged dinners for batch-cooked meals would save you ~$95 this month."
-5.  **Critical Outlier**: Flag the single largest transaction and provide a brief "Necessity Assessment."
+1. **Executive Summary**: One sentence on their overall financial health. Use an emoji (🚀, 📈, ⚖️, ⚠️) to set the tone.
+2. **Top Burn Categories**: Identify the top 3 high-spend categories. For the #1 category, drill into the items (e.g., "You spent $200 on Dining Out, but $120 was specifically on late-night fast food").
+3. **Silent Leak**: Find a high-frequency, low-value recurring item (e.g., daily coffees). State the annualized cost as a "shock value" insight.
+4. **Wealth Moves**: Two specific, actionable tips — not generic advice. Reference actual items or vendors from the data.
+5. **Outlier**: Flag the single largest transaction and briefly assess whether it looks necessary.
 
-# FORMATTING (ReactMarkdown-ready)
-- Use **BOLD** for emphasis and financial figures.
-- Use \`> [!TIP]\` alert blocks (if supported) or stylized blockquotes.
-- Use bulleted lists for scannability.
-- Strictly under **160 words**.
+# FORMATTING
+- Use **bold** for figures and key terms.
+- Use blockquotes (\`>\`) for callout tips.
+- Bullet points for scannability.
+- 250–300 words max.
 
 # REQUIRED STRUCTURE
 ## 🏦 Executive Summary
-[Market Sentiment]
+One-sentence status report on financial health.
 
 ## 🔍 Forensic Analysis
-- **[Focus Category]**: $[Amount] ([%] of total). Point out specific items or vendors driving this.
-- **Outlier Alert**: The $[Amount] purchase at [Merchant] represents [X]% of your total period spend.
+- **[Top Category]**: $X (Y% of total). Note specific items or vendors.
+- **Silent Leak**: Recurring item costing ~$X/month, ~$X/year.
+- **Outlier Alert**: Largest transaction — $X at [Merchant] — necessity assessment.
 
 ## 💡 Wealth Strategy
-[Tip 1 - Behavioral]
-[Tip 2 - Optimization]
+> Tip 1: Specific behavioral change referencing actual spend data.
+
+> Tip 2: Specific optimization referencing actual items or vendors.
 `;
 
     // ✅ 6. Call OpenAI
@@ -129,7 +126,7 @@ ${dataString}
         body: JSON.stringify({
           model: "gpt-4o-mini",
           messages: [
-            { role: "system", content: "You are a financial analyst." },
+            { role: "system", content: "You are FinBuddy, an elite personal finance strategist. You speak with the authority of a hedge fund manager but the empathy of a close mentor. You give sharp, specific, data-driven financial insights — never generic advice." },
             { role: "user", content: prompt },
           ],
           temperature: 0.5,
