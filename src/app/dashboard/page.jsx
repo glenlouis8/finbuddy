@@ -659,6 +659,7 @@ export default function Dashboard() {
                 {summaryUpdatedAt
                   ? new Date(summaryUpdatedAt).toLocaleString("en-US", {
                     timeZone: "America/New_York",
+                    timeZoneName: "short",
                   })
                   : "—"}
               </div>
