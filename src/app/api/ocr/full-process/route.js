@@ -6,10 +6,7 @@ export async function POST(req) {
   const supabase = supabaseAdmin;
 
   try {
-    console.log("✅ [full-process] Request received");
-
     const { filePath, expenseId } = await req.json();
-    console.log("📦 Payload received:", { filePath, expenseId });
 
     if (!filePath || !expenseId) {
       console.error("❌ Missing filePath or expenseId");
@@ -30,12 +27,9 @@ export async function POST(req) {
     }
 
     const receiptImageUrl = signedURLData.signedUrl;
-    console.log("🔗 Signed URL generated:", receiptImageUrl);
 
     // Step 2 & 3: GPT-4o Vision for extraction
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-    console.log("🧠 Sending image to GPT-4o Vision...");
 
     const chatRes = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -68,7 +62,6 @@ export async function POST(req) {
     });
 
     const parsedContent = chatRes.choices?.[0]?.message?.content;
-    console.log("🧾 Raw GPT Response:", parsedContent);
 
     let parsedJson;
     try {
@@ -90,7 +83,6 @@ export async function POST(req) {
     }
 
     // Step 4: Generate Embedding for Semantic Search
-    console.log("🪄 Generating semantic embedding...");
     const embeddingInput = `Category: ${parsedJson.category}. Description: ${parsedJson.description}. Items: ${parsedJson.items?.map(i => i.name).join(", ")}`;
 
     const embeddingRes = await openai.embeddings.create({
@@ -101,7 +93,6 @@ export async function POST(req) {
     const embedding = embeddingRes.data[0].embedding;
 
     // Step 5: Update expense
-    console.log("🛠️ Updating expense in DB...");
     const { error: updateError } = await supabase
       .from("expenses")
       .update({
@@ -121,7 +112,6 @@ export async function POST(req) {
       );
     }
 
-    console.log("✅ Expense updated successfully with embedding!");
     return Response.json({ success: true });
   } catch (err) {
     console.error("💥 Unhandled error in full-process route:", err);

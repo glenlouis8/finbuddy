@@ -36,7 +36,6 @@ export async function POST() {
     }
 
     const receipt = receipts[0];
-    console.log("🧠 Generating insights for:", receipt.id);
 
     // 2. Construct the prompt
     const prompt = `

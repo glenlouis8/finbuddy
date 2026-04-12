@@ -1,7 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 
 export const getExpenses = async (uid) => {
-  console.log("🔥 getExpenses called with", uid);
   const { data, error } = await supabase
     .from("expenses")
     .select("*")
@@ -18,7 +17,6 @@ export const getExpenses = async (uid) => {
 
 export const getSmartSummary = async (uid) => {
   try {
-    console.log("✨ getSmartSummary called with", uid);
     const { data, error } = await supabase
       .from("ai_summary")
       .select("summary_text,updated_at")

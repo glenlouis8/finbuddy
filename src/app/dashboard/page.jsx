@@ -142,8 +142,6 @@ export default function Dashboard() {
   useEffect(() => {
     if (summaryData === undefined) return; // still loading or no fetch
 
-    console.log("SWR summaryData:", summaryData);
-
     if (!summaryData) {
       setSmartSummary(null);
       setSummaryUpdatedAt(null);
@@ -232,7 +230,6 @@ export default function Dashboard() {
       });
 
       const json = await res.json();
-      console.log("/api/summary-insights response:", res.status, json);
 
       if (res.ok) {
         setSmartSummary(json.summary ?? null);

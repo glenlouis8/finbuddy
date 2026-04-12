@@ -22,7 +22,6 @@ export async function POST(req) {
 
     try {
         // 1. Generate text-embedding for the search query
-        console.log("🔍 Semantic Querying for:", query);
         const embeddingRes = await openai.embeddings.create({
             model: "text-embedding-3-small",
             input: query,

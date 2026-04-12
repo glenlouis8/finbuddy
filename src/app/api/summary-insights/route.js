@@ -72,7 +72,6 @@ export async function POST(req) {
       .single();
 
     if (cachedSummary) {
-      console.log("🚀 [Cache] Exact match found! Skipping OpenAI call.");
       return Response.json({ summary: cachedSummary.summary_text, cached: true });
     }
 
