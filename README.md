@@ -1,4 +1,6 @@
 
+![FinBuddy Demo](./assets/demo.png)
+
 # 🤖 Project Vision: FinBuddy Elite
 **FinBuddy** is a world-class Finance SaaS directed at bridging the gap between messy, real-world physical data and structured financial intelligence. Unlike traditional expense trackers, FinBuddy utilizes an **Advanced AI Intelligence Pipeline** to automate extraction, predict budget burnout, and provide proactive wealth strategies based on longitudinal spending patterns.
 
