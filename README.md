@@ -1,69 +1,62 @@
+# FinBuddy
 
-![FinBuddy Demo](./assets/demo.png)
+Receipt-to-insight expense tracker. Upload a photo → GPT-4o Vision extracts line items → semantic search + spending summaries powered by pgvector and GPT-4o-mini.
 
-# 🤖 Project Vision: FinBuddy Elite
-**FinBuddy** is a world-class Finance SaaS directed at bridging the gap between messy, real-world physical data and structured financial intelligence. Unlike traditional expense trackers, FinBuddy utilizes an **Advanced AI Intelligence Pipeline** to automate extraction, predict budget burnout, and provide proactive wealth strategies based on longitudinal spending patterns.
+**[Live demo →](https://finbuddy-flame.vercel.app)**
 
----
-
-# 🚀 State-of-the-Art AI Architecture
-
-### 1. High-Fidelity Vision Pipeline (GPT-4o)
-We moved beyond legacy OCR to a native **GPT-4o Vision** architecture.
-* **Granular Extraction**: Captures individual line items, quantities, and merchant-specific metadata.
-* **Deterministic Parsing**: Enforced JSON schema outputs with `temperature: 0` for reliable, reproducible financial data.
-
-### 2. Hybrid Semantic Search (Vector Intelligence)
-Powered by **Supabase pgvector**, our search goes beyond keywords.
-* **Embeddings**: Uses `text-embedding-3-small` to generate 1536-dimensional vector representations.
-* **Intent-Based Discovery**: Find transactions by "vibes" or "categories" (e.g., searching for "morning routine" surfacing coffee shops and gym sessions).
-
-### 3. Retrieval-Augmented Generation (Receipt RAG)
-Every transaction is an interactive knowledge base.
-* **Contextual Chat**: Grounded RAG allows users to ask specific questions like "Is this a business write-off?" or "Break down the tax on this lunch."
-* **GPT-4o-mini Orchestration**: Optimized for 100ms-range response times while maintaining high analytical accuracy.
-
-### 4. Proactive Predictors: Budget Shield & Smart Switch
-* **Budget Shield**: A velocity-based predictor that projects month-end burn rates against user-defined limits.
-* **Smart Switch**: An optimization engine analyzing recurring receipt items and manual bills to suggest bulk-buy or annual-plan savings.
-
-### 5. Semantic Caching & Cost Engineering
-To scale efficiently, we implemented a **Vector-Fingerprint Cache**:
-* **Input Hashing**: Hashing transaction snapshots ensures we only call the LLM when data has meaningfully changed.
-* **90% Cost Reduction**: Re-serving cached insights for static financial states optimizes token usage without sacrificing UX.
+![FinBuddy Dashboard](./assets/demo.png)
 
 ---
 
-# �️ Enterprise-Grade Security & Stack
+## How it works
 
-| Layer | Technologies |
-|:---|:---|
-| **Frontend** | **Next.js 15 (App Router)**, **React 19**, **Framer Motion** |
-| **Intelligence** | **GPT-4o Vision**, **GPT-4o-mini**, `text-embedding-3-small` |
-| **Data Layer** | **Supabase (PostgreSQL)** + **pgvector** |
-| **Security** | **RLS (Row Level Security)** + **JWT Authentication** |
-| **Architecture** | **Secure Dual-Client Logic** (Admin Role Verified by UID) |
+1. **Upload receipt** — stored in Supabase Storage, processed by GPT-4o Vision (`temperature: 0`, `response_format: json_object`) to extract amount, category, date, and line items
+2. **Embedding** — each expense gets a `text-embedding-3-small` vector (1536-dim) stored in pgvector for semantic search
+3. **Insights** — GPT-4o-mini generates per-receipt contextual insights, stored in `expenses.insights_json`
+4. **Summary** — SHA-256 hash of current expense snapshot gates LLM calls; cached results served from `ai_summary_cache` (~90% of requests hit cache)
+5. **Budget Shield** — velocity-based burnout projection (no LLM) against `profiles.monthly_budget`
+6. **Smart Switch** — GPT-4o-mini analyzes 50 recent transactions for recurring cost optimizations
 
----
+## Stack
 
-# 📈 Engineering Challenges Overcome
+| Layer | Choice |
+|---|---|
+| Frontend | Next.js 15 App Router, React 19, Framer Motion, Chart.js |
+| AI | GPT-4o Vision, GPT-4o-mini, text-embedding-3-small |
+| Database | Supabase (Postgres + pgvector with ivfflat index) |
+| Auth | Clerk (UI) + Supabase JWT (API route verification + RLS) |
 
-### Problem: Handling High-Latency Vision Inference
-**Solution**: Implemented a **Non-Blocking Background Worker**. The frontend receives a 201 Created immediately, and the `full-process` edge function updates the record via a secure Admin Client once GPT-4o Vision completes the analysis.
+## Setup
 
-### Problem: Multi-Tenant LLM Privacy
-**Solution**: Architected a **Context-Injection Guardrail**. The LLM is NEVER given raw database handles. It is provided with a sanitized, strictly-filtered JSON projection derived from a JWT-verified Supabase session, ensuring zero data leakage between users.
-
----
-
-# 🧪 Evaluation Framework
-We don't guess accuracy; we measure it.
 ```bash
+cp .env.example .env.local
+# fill in values
+npm install
+npm run dev
+```
+
+### Required environment variables
+
+```bash
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+CLERK_SECRET_KEY=
+
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+OPENAI_API_KEY=
+```
+
+Supabase migrations are in `supabase/migrations/`. Run them in order — `20260210_vector_search.sql` creates the `match_expenses()` pgvector RPC.
+
+## Eval
+
+OCR extraction accuracy is measured against ground truth:
+
+```bash
+# requires dev server running
 node evals/scripts/run_eval.js
 ```
-The specialized eval suite benchmarks our Vision extraction and Intelligence endpoints against ground-truth datasets to maintain a **95%+ accuracy floor**.
 
----
-*FinBuddy: Turning physical receipts into proactive financial power.*
-
-### Live Experience: [finbuddy-flame.vercel.app](https://finbuddy-flame.vercel.app)
+Compares extracted `amount`, `category`, and `items` against `evals/data/ground_truth.json`. Set `EVAL_BASE_URL` to point at a non-local server.

@@ -5,24 +5,40 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-// 🔧 Utility to extract JSON from Markdown
-function extractJSONFromMarkdown(markdown) {
-  const match = markdown.match(/```json([\s\S]*?)```/);
-  if (match) return match[1].trim();
-  return markdown.trim(); // fallback: try parsing raw string
-}
-
-export async function POST() {
+export async function POST(req) {
   try {
-    // 1. Fetch a receipt with OCR text but no insights
+    const authHeader = req.headers.get("Authorization");
+    const token = authHeader?.replace("Bearer ", "");
+
+    if (!token) {
+      return Response.json({ error: "Missing access token" }, { status: 401 });
+    }
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      }
+    );
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { data: receipts, error } = await supabase
       .from("expenses")
       .select("*")
+      .eq("user_id", user.id)
       .is("insights_json", null)
       .not("ocr_text", "is", null)
       .order("created_at", { ascending: false })
@@ -37,22 +53,9 @@ export async function POST() {
 
     const receipt = receipts[0];
 
-    // 2. Construct the prompt
-    const prompt = `
-You are a financial assistant. Your job is to extract actionable insights from OCR text of a retail receipt. Use the text to identify:
-1. Store name
-2. List of purchased items
-3. Total amount spent
-4. Purchase date (if available)
-5. Item categories (guess if needed)
-6. Insights such as:
-   - Unusual or large spending
-   - Category-level summaries
-   - Any expense optimizations or tips
+    const prompt = `Extract financial insights from this receipt OCR text.
 
-Output must be a clean **JSON** object with the following structure:
-
-\`\`\`json
+Return a JSON object with this exact shape:
 {
   "total_spent": number,
   "store_name": string,
@@ -61,52 +64,33 @@ Output must be a clean **JSON** object with the following structure:
   "insights": {
     "unusual_spending": boolean,
     "category_guesses": {
-      "item_name_1": "category",
-      "item_name_2": "category"
+      "<item_name>": "<category>"
     }
   }
 }
-\`\`\`
 
-Text:
-\`\`\`
-${receipt.ocr_text}
-\`\`\`
-`;
+Receipt text:
+${receipt.ocr_text}`;
 
-    // 3. Send to OpenAI
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       temperature: 0.2,
+      response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: "You are a personal finance assistant." },
+        { role: "system", content: "You are a personal finance assistant. Always respond with valid JSON." },
         { role: "user", content: prompt },
       ],
     });
 
-    const insightsRaw = completion.choices[0].message.content;
-    let insights_json;
+    const insights_json = JSON.parse(completion.choices[0].message.content);
 
-    try {
-      const cleaned = extractJSONFromMarkdown(insightsRaw);
-      insights_json = JSON.parse(cleaned);
-    } catch (parseError) {
-      console.error("❌ Failed to parse insights JSON:", parseError);
-      console.error("🧾 Raw response:", insightsRaw);
-      return Response.json(
-        { error: "Invalid JSON from LLM", raw: insightsRaw },
-        { status: 500 }
-      );
-    }
-
-    // 4. Update DB
     const { error: updateError } = await supabase
       .from("expenses")
       .update({ insights_json })
       .eq("id", receipt.id);
 
     if (updateError) {
-      console.error("❌ Failed to update Supabase:", updateError);
+      console.error("Failed to update Supabase:", updateError);
       return Response.json(
         { error: "Failed to store insights in DB" },
         { status: 500 }
@@ -115,7 +99,7 @@ ${receipt.ocr_text}
 
     return Response.json({ status: "success", insights: insights_json });
   } catch (err) {
-    console.error("🔥 Insights route error:", err);
+    console.error("Insights route error:", err);
     return Response.json({ error: "Server error" }, { status: 500 });
   }
 }
