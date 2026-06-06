@@ -9,6 +9,9 @@ export default function AccountPage() {
   const [user, setUser] = useState(null);
   const [displayName, setDisplayName] = useState("");
   const [editing, setEditing] = useState(false);
+  const [budget, setBudget] = useState("");
+  const [editingBudget, setEditingBudget] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     fetchUser();
@@ -26,13 +29,14 @@ export default function AccountPage() {
 
     const { data } = await supabase
       .from("profiles")
-      .select("display_name")
+      .select("display_name, monthly_budget")
       .eq("id", user.id)
       .single();
 
     const providerName = user.user_metadata?.full_name || user.user_metadata?.name || "";
     setUser(user);
     setDisplayName(data?.display_name || providerName || "");
+    setBudget(data?.monthly_budget ?? 2000);
     setLoading(false);
   }
 
@@ -44,9 +48,15 @@ export default function AccountPage() {
     setEditing(false);
   }
 
+  async function saveBudget() {
+    if (!user) return;
+    await supabase
+      .from("profiles")
+      .upsert({ id: user.id, monthly_budget: Number(budget) });
+    setEditingBudget(false);
+  }
+
   async function deleteAccount() {
-    if (!confirm("This will permanently delete your account. Continue?"))
-      return;
     const { data: { session } } = await supabase.auth.getSession();
     await fetch("/api/delete-user", {
       method: "POST",
@@ -141,14 +151,79 @@ export default function AccountPage() {
           )}
         </div>
 
+        {/* Monthly Budget */}
+        <div>
+          <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">
+            Monthly Budget
+          </label>
+          {editingBudget ? (
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={budget}
+                  onChange={(e) => setBudget(e.target.value)}
+                  className="w-full pl-7 pr-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100"
+                />
+              </div>
+              <button
+                onClick={saveBudget}
+                className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 transition"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => setEditingBudget(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 dark:bg-neutral-800 dark:text-gray-200 dark:hover:bg-neutral-700 transition"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div className="flex justify-between items-center">
+              <span className="text-gray-700 dark:text-gray-200">
+                ${Number(budget).toLocaleString()}/month
+              </span>
+              <button
+                onClick={() => setEditingBudget(true)}
+                className="text-sm font-medium text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white"
+              >
+                Edit
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Delete Account */}
-        <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
-          <button
-            onClick={deleteAccount}
-            className="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
-          >
-            Delete Account
-          </button>
+        <div className="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-2">
+          {confirmDelete ? (
+            <div className="space-y-2">
+              <p className="text-sm text-red-500 font-medium">This will permanently delete your account and all data. Are you sure?</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={deleteAccount}
+                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+                >
+                  Yes, delete everything
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 dark:bg-neutral-800 dark:text-gray-200 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+            >
+              Delete Account
+            </button>
+          )}
         </div>
       </div>
     </div>

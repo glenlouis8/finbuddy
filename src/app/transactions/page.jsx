@@ -21,6 +21,7 @@ import {
   MoreHorizontal,
   TrendingDown,
   Wallet,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import LoaderSpinner from "@/components/ui/LoaderSpinner";
@@ -45,6 +46,7 @@ export default function TransactionsPage() {
 
   const [isSemantic, setIsSemantic] = useState(false);
   const [semanticResults, setSemanticResults] = useState([]);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   // Fetch Session
   useEffect(() => {
@@ -93,9 +95,30 @@ export default function TransactionsPage() {
   );
 
   const handleDelete = async (id) => {
-    if (!confirm("Are you sure you want to delete this?")) return;
     await supabase.from("expenses").delete().eq("id", id);
+    setConfirmDeleteId(null);
     mutate();
+  };
+
+  const exportCSV = () => {
+    const rows = [
+      ["Date", "Category", "Amount", "Description", "Items"],
+      ...filtered.map((tx) => [
+        tx.date,
+        tx.category,
+        tx.amount,
+        tx.description || "",
+        (tx.ocr_parsed?.items || []).map((i) => `${i.name} $${i.price}`).join("; "),
+      ]),
+    ];
+    const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `finbuddy-transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const baseList = isSemantic ? semanticResults : (transactionsData || []);
@@ -131,8 +154,16 @@ export default function TransactionsPage() {
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="flex gap-4"
+            className="flex gap-4 items-start"
           >
+            <Button
+              onClick={exportCSV}
+              variant="secondary"
+              className="flex items-center gap-2 rounded-2xl px-4 py-4 h-auto bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </Button>
             <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-4 rounded-2xl shadow-sm flex items-center gap-4">
               <div className="p-3 bg-indigo-500/10 text-indigo-500 rounded-xl">
                 <Wallet className="w-6 h-6" />
@@ -153,6 +184,7 @@ export default function TransactionsPage() {
               </div>
             </div>
           </motion.div>
+
         </div>
 
         {/* Controls */}
@@ -229,22 +261,45 @@ export default function TransactionsPage() {
                         </div>
 
                         <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button
-                            variant="secondary"
-                            size="icon"
-                            onClick={(e) => { e.stopPropagation(); router.push(`/edit-expense/${tx.id}`); }}
-                            className="rounded-xl w-10 h-10 hover:bg-indigo-500 hover:text-white transition-colors"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="icon"
-                            onClick={(e) => { e.stopPropagation(); handleDelete(tx.id); }}
-                            className="rounded-xl w-10 h-10 hover:bg-red-500 hover:text-white transition-colors"
-                          >
-                            <Trash className="w-4 h-4" />
-                          </Button>
+                          {confirmDeleteId === tx.id ? (
+                            <>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={(e) => { e.stopPropagation(); handleDelete(tx.id); }}
+                                className="rounded-xl px-3 h-10 bg-red-500 text-white hover:bg-red-600 transition-colors text-xs font-bold"
+                              >
+                                Confirm
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                size="icon"
+                                onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null); }}
+                                className="rounded-xl w-10 h-10 transition-colors"
+                              >
+                                ✕
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                variant="secondary"
+                                size="icon"
+                                onClick={(e) => { e.stopPropagation(); router.push(`/edit-expense/${tx.id}`); }}
+                                className="rounded-xl w-10 h-10 hover:bg-indigo-500 hover:text-white transition-colors"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                size="icon"
+                                onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(tx.id); }}
+                                className="rounded-xl w-10 h-10 hover:bg-red-500 hover:text-white transition-colors"
+                              >
+                                <Trash className="w-4 h-4" />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
