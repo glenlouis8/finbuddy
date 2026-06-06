@@ -665,7 +665,7 @@ export default function Dashboard() {
             </div>
 
             {loadingSummaryFromSWR || loadingSummaryManually ? (
-              <LoaderSpinner className=”mx-auto” />
+              <div className=”flex justify-center”><LoaderSpinner /></div>
             ) : smartSummary ? (
               <div className=”space-y-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed”>
                 <ReactMarkdown
