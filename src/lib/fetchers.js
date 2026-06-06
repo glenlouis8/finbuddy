@@ -5,7 +5,8 @@ export const getExpenses = async (uid) => {
     .from("expenses")
     .select("*")
     .eq("user_id", uid)
-    .order("date", { ascending: false });
+    .order("date", { ascending: false })
+    .limit(200);
 
   if (error) {
     console.error("❌ Supabase error in getExpenses:", error);

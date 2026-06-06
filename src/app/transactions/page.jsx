@@ -22,6 +22,8 @@ import {
   TrendingDown,
   Wallet,
   Download,
+  AlertTriangle,
+  ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import LoaderSpinner from "@/components/ui/LoaderSpinner";
@@ -36,19 +38,23 @@ const categoryIcons = {
   Other: { icon: MoreHorizontal, color: "bg-gray-500/20 text-gray-500" },
 };
 
+const PAGE_SIZE = 20;
+
 export default function TransactionsPage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
   const [expandedId, setExpandedId] = useState(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [receiptOpen, setReceiptOpen] = useState(null);
 
   const [isSemantic, setIsSemantic] = useState(false);
   const [semanticResults, setSemanticResults] = useState([]);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
-  // Fetch Session
   useEffect(() => {
     supabase.auth.getSession().then(({ data, error }) => {
       if (error || !data.session?.user) return router.push("/sign-in");
@@ -57,7 +63,12 @@ export default function TransactionsPage() {
     });
   }, [router]);
 
-  // Semantic Search Effect (Debounced)
+  // Reset visible count when filters change
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [search, categoryFilter, dateFilter]);
+
+  // Semantic search (debounced)
   useEffect(() => {
     if (!search || search.length < 3) {
       setSemanticResults([]);
@@ -80,7 +91,7 @@ export default function TransactionsPage() {
       });
       const data = await res.json();
       if (data.results) setSemanticResults(data.results);
-    }, 600); // 600ms debounce
+    }, 600);
 
     return () => clearTimeout(timer);
   }, [search]);
@@ -102,12 +113,13 @@ export default function TransactionsPage() {
 
   const exportCSV = () => {
     const rows = [
-      ["Date", "Category", "Amount", "Description", "Items"],
+      ["Date", "Category", "Amount", "Description", "Store", "Items"],
       ...filtered.map((tx) => [
         tx.date,
         tx.category,
         tx.amount,
         tx.description || "",
+        tx.insights_json?.store_name || "",
         (tx.ocr_parsed?.items || []).map((i) => `${i.name} $${i.price}`).join("; "),
       ]),
     ];
@@ -121,13 +133,34 @@ export default function TransactionsPage() {
     URL.revokeObjectURL(url);
   };
 
+  const applyDateFilter = (tx) => {
+    if (!dateFilter) return true;
+    const txDate = new Date(tx.date);
+    const now = new Date();
+    if (dateFilter === "this_month") {
+      return txDate.getFullYear() === now.getFullYear() && txDate.getMonth() === now.getMonth();
+    }
+    if (dateFilter === "last_30") {
+      const cutoff = new Date(now); cutoff.setDate(now.getDate() - 30);
+      return txDate >= cutoff;
+    }
+    if (dateFilter === "last_90") {
+      const cutoff = new Date(now); cutoff.setDate(now.getDate() - 90);
+      return txDate >= cutoff;
+    }
+    if (dateFilter === "this_year") {
+      return txDate.getFullYear() === now.getFullYear();
+    }
+    return true;
+  };
+
   const baseList = isSemantic ? semanticResults : (transactionsData || []);
   const filtered = baseList
-    .filter((tx) => {
-      return categoryFilter ? tx.category === categoryFilter : true;
-    })
+    .filter((tx) => categoryFilter ? tx.category === categoryFilter : true)
+    .filter(applyDateFilter)
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
+  const visible = filtered.slice(0, visibleCount);
   const totalSpent = filtered.reduce((acc, tx) => acc + Number(tx.amount || 0), 0);
 
   if (loadingUser || loadingTransactions) {
@@ -141,12 +174,9 @@ export default function TransactionsPage() {
   return (
     <div className="min-h-screen px-6 lg:px-12 py-12 bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
       <div className="max-w-5xl mx-auto">
-        {/* Header Section */}
+        {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-8">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-          >
+          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
             <h1 className="text-5xl font-extrabold tracking-tighter mb-2">Transactions</h1>
             <p className="text-gray-500 dark:text-gray-400 font-medium">Manage and monitor your financial flow</p>
           </motion.div>
@@ -154,7 +184,7 @@ export default function TransactionsPage() {
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="flex gap-4 items-start"
+            className="flex gap-4 items-start flex-wrap"
           >
             <Button
               onClick={exportCSV}
@@ -173,7 +203,6 @@ export default function TransactionsPage() {
                 <p className="text-2xl font-black">${totalSpent.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
               </div>
             </div>
-
             <div className="bg-indigo-600 text-white p-4 rounded-2xl shadow-lg shadow-indigo-500/20 flex items-center gap-4">
               <div className="p-3 bg-white/20 rounded-xl">
                 <TrendingDown className="w-6 h-6" />
@@ -184,7 +213,6 @@ export default function TransactionsPage() {
               </div>
             </div>
           </motion.div>
-
         </div>
 
         {/* Controls */}
@@ -204,10 +232,21 @@ export default function TransactionsPage() {
             onChange={(e) => setCategoryFilter(e.target.value)}
             className="px-4 py-4 rounded-2xl border-none bg-white dark:bg-gray-900 shadow-sm focus:ring-2 focus:ring-indigo-500 transition-all outline-none text-gray-500"
           >
-            <option value="">Status: All Categories</option>
+            <option value="">All Categories</option>
             {Object.keys(categoryIcons).map((cat) => (
               <option key={cat} value={cat}>{cat}</option>
             ))}
+          </select>
+          <select
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="md:col-span-3 px-4 py-4 rounded-2xl border-none bg-white dark:bg-gray-900 shadow-sm focus:ring-2 focus:ring-indigo-500 transition-all outline-none text-gray-500"
+          >
+            <option value="">All Time</option>
+            <option value="this_month">This Month</option>
+            <option value="last_30">Last 30 Days</option>
+            <option value="last_90">Last 90 Days</option>
+            <option value="this_year">This Year</option>
           </select>
         </div>
 
@@ -222,10 +261,12 @@ export default function TransactionsPage() {
                 <p className="text-gray-400 font-medium italic">Empty space. Time to save some money?</p>
               </motion.div>
             ) : (
-              filtered.map((tx, idx) => {
+              visible.map((tx, idx) => {
                 const config = categoryIcons[tx.category] || categoryIcons.Other;
                 const Icon = config.icon;
                 const isExpanded = expandedId === tx.id;
+                const insights = tx.insights_json;
+                const isUnusual = insights?.insights?.unusual_spending;
 
                 return (
                   <motion.div
@@ -237,14 +278,27 @@ export default function TransactionsPage() {
                     transition={{ delay: idx * 0.03 }}
                     className={`group bg-white dark:bg-gray-900 rounded-3xl p-1 shadow-sm hover:shadow-xl transition-all border border-transparent hover:border-indigo-500/20 ${isExpanded ? 'ring-2 ring-indigo-500/10' : ''}`}
                   >
-                    <div className="p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : tx.id)}>
+                    <div
+                      className="p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 cursor-pointer"
+                      onClick={() => setExpandedId(isExpanded ? null : tx.id)}
+                    >
                       <div className="flex items-center gap-5">
                         <div className={`p-4 rounded-2xl ${config.color} transition-transform group-hover:scale-110`}>
                           <Icon className="w-6 h-6" />
                         </div>
                         <div>
-                          <p className="text-lg font-bold tracking-tight">{tx.category}</p>
-                          <p className="text-sm text-gray-400 font-medium">{new Date(tx.date).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-lg font-bold tracking-tight">{insights?.store_name || tx.category}</p>
+                            {isUnusual && (
+                              <span className="flex items-center gap-1 text-xs font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                                <AlertTriangle className="w-3 h-3" /> Unusual
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-400 font-medium">
+                            {insights?.store_name && <span className="text-gray-500">{tx.category} · </span>}
+                            {new Date(tx.date).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                          </p>
                         </div>
                       </div>
 
@@ -260,7 +314,8 @@ export default function TransactionsPage() {
                           )}
                         </div>
 
-                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {/* Gap 2: visible on mobile, hover-reveal on desktop */}
+                        <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                           {confirmDeleteId === tx.id ? (
                             <>
                               <Button
@@ -313,6 +368,31 @@ export default function TransactionsPage() {
                           className="overflow-hidden border-t dark:border-gray-800 mx-6"
                         >
                           <div className="py-6 space-y-4">
+
+                            {/* Gap 3: insights_json */}
+                            {insights && (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {insights.store_name && (
+                                  <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                                    <p className="text-xs text-gray-400 uppercase font-black mb-1">Store</p>
+                                    <p className="text-sm font-semibold">{insights.store_name}</p>
+                                  </div>
+                                )}
+                                {insights.detected_date && (
+                                  <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                                    <p className="text-xs text-gray-400 uppercase font-black mb-1">Receipt Date</p>
+                                    <p className="text-sm font-semibold">{insights.detected_date}</p>
+                                  </div>
+                                )}
+                                {isUnusual && (
+                                  <div className="sm:col-span-2 flex items-center gap-2 p-3 bg-amber-500/10 rounded-xl border border-amber-500/20">
+                                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                                    <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">Flagged as unusual spending for this category</p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
                             {tx.description && (
                               <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-800">
                                 <p className="text-xs text-gray-400 uppercase font-black mb-1">Analyst Note</p>
@@ -333,6 +413,36 @@ export default function TransactionsPage() {
                                 </div>
                               </div>
                             )}
+
+                            {/* Gap 1: receipt image */}
+                            {tx.receipt_url && (
+                              <div className="space-y-2">
+                                <p className="text-xs text-gray-400 uppercase font-black px-1">Receipt</p>
+                                {receiptOpen === tx.id ? (
+                                  <div className="relative">
+                                    <img
+                                      src={tx.receipt_url}
+                                      alt="Receipt"
+                                      className="w-full rounded-2xl border border-gray-200 dark:border-gray-700 object-contain max-h-[500px]"
+                                    />
+                                    <button
+                                      onClick={() => setReceiptOpen(null)}
+                                      className="absolute top-2 right-2 bg-black/60 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-black/80"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => setReceiptOpen(tx.id)}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                  >
+                                    <ImageIcon className="w-4 h-4" />
+                                    View Receipt Image
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </motion.div>
                       )}
@@ -342,6 +452,19 @@ export default function TransactionsPage() {
               })
             )}
           </AnimatePresence>
+
+          {/* Gap 5: pagination */}
+          {visibleCount < filtered.length && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-center pt-4">
+              <Button
+                onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                variant="secondary"
+                className="rounded-2xl px-8 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800 font-semibold"
+              >
+                Load more ({filtered.length - visibleCount} remaining)
+              </Button>
+            </motion.div>
+          )}
         </div>
       </div>
     </div>
