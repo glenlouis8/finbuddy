@@ -24,6 +24,8 @@ import {
   Download,
   AlertTriangle,
   ImageIcon,
+  Clapperboard,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import LoaderSpinner from "@/components/ui/LoaderSpinner";
@@ -35,6 +37,7 @@ const categoryIcons = {
   Bills: { icon: Receipt, color: "bg-green-500/20 text-green-500" },
   Health: { icon: HeartPulse, color: "bg-red-500/20 text-red-500" },
   Travel: { icon: Plane, color: "bg-purple-500/20 text-purple-500" },
+  Entertainment: { icon: Clapperboard, color: "bg-yellow-500/20 text-yellow-500" },
   Other: { icon: MoreHorizontal, color: "bg-gray-500/20 text-gray-500" },
 };
 
@@ -49,7 +52,6 @@ export default function TransactionsPage() {
   const [dateFilter, setDateFilter] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [receiptOpen, setReceiptOpen] = useState(null);
 
   const [isSemantic, setIsSemantic] = useState(false);
   const [semanticResults, setSemanticResults] = useState([]);
@@ -287,8 +289,13 @@ export default function TransactionsPage() {
                           <Icon className="w-6 h-6" />
                         </div>
                         <div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-lg font-bold tracking-tight">{insights?.store_name || tx.category}</p>
+                            {tx.receipt_url && (
+                              <span className="flex items-center gap-1 text-xs font-bold text-indigo-500 bg-indigo-500/10 px-2 py-0.5 rounded-full">
+                                <ImageIcon className="w-3 h-3" /> Receipt
+                              </span>
+                            )}
                             {isUnusual && (
                               <span className="flex items-center gap-1 text-xs font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">
                                 <AlertTriangle className="w-3 h-3" /> Unusual
@@ -414,33 +421,19 @@ export default function TransactionsPage() {
                               </div>
                             )}
 
-                            {/* Gap 1: receipt image */}
+                            {/* Receipt link */}
                             {tx.receipt_url && (
                               <div className="space-y-2">
                                 <p className="text-xs text-gray-400 uppercase font-black px-1">Receipt</p>
-                                {receiptOpen === tx.id ? (
-                                  <div className="relative">
-                                    <img
-                                      src={tx.receipt_url}
-                                      alt="Receipt"
-                                      className="w-full rounded-2xl border border-gray-200 dark:border-gray-700 object-contain max-h-[500px]"
-                                    />
-                                    <button
-                                      onClick={() => setReceiptOpen(null)}
-                                      className="absolute top-2 right-2 bg-black/60 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-black/80"
-                                    >
-                                      ✕
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <button
-                                    onClick={() => setReceiptOpen(tx.id)}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                  >
-                                    <ImageIcon className="w-4 h-4" />
-                                    View Receipt Image
-                                  </button>
-                                )}
+                                <a
+                                  href={`/receipt/${tx.id}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors"
+                                >
+                                  <ImageIcon className="w-4 h-4" />
+                                  View Receipt
+                                  <ExternalLink className="w-3 h-3 opacity-60" />
+                                </a>
                               </div>
                             )}
                           </div>

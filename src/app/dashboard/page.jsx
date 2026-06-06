@@ -44,7 +44,8 @@ import {
   Receipt,
   HeartPulse,
   Plane,
-  MoreHorizontal
+  MoreHorizontal,
+  Clapperboard,
 } from "lucide-react";
 
 const categoryIcons = {
@@ -54,6 +55,7 @@ const categoryIcons = {
   Bills: { icon: Receipt, color: "bg-green-500/20 text-green-500" },
   Health: { icon: HeartPulse, color: "bg-red-500/20 text-red-500" },
   Travel: { icon: Plane, color: "bg-purple-500/20 text-purple-500" },
+  Entertainment: { icon: Clapperboard, color: "bg-yellow-500/20 text-yellow-500" },
   Other: { icon: MoreHorizontal, color: "bg-gray-500/20 text-gray-500" },
 };
 
