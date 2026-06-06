@@ -665,13 +665,46 @@ export default function Dashboard() {
             </div>
 
             {loadingSummaryFromSWR || loadingSummaryManually ? (
-              <LoaderSpinner className="mx-auto" />
+              <LoaderSpinner className=”mx-auto” />
             ) : smartSummary ? (
-              <div className="prose dark:prose-invert max-w-none">
-                <ReactMarkdown>{smartSummary}</ReactMarkdown>
+              <div className=”space-y-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed”>
+                <ReactMarkdown
+                  components={{
+                    h2: ({ children }) => (
+                      <h2 className=”text-base font-bold text-gray-900 dark:text-white mt-5 mb-2 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-1”>
+                        {children}
+                      </h2>
+                    ),
+                    h3: ({ children }) => (
+                      <h3 className=”text-sm font-semibold text-gray-800 dark:text-gray-200 mt-3 mb-1”>{children}</h3>
+                    ),
+                    p: ({ children }) => (
+                      <p className=”mb-2 text-gray-600 dark:text-gray-400”>{children}</p>
+                    ),
+                    strong: ({ children }) => (
+                      <strong className=”font-bold text-gray-900 dark:text-white”>{children}</strong>
+                    ),
+                    ul: ({ children }) => (
+                      <ul className=”space-y-1 mb-3 pl-4”>{children}</ul>
+                    ),
+                    li: ({ children }) => (
+                      <li className=”flex gap-2 text-gray-600 dark:text-gray-400”>
+                        <span className=”mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0” />
+                        <span>{children}</span>
+                      </li>
+                    ),
+                    blockquote: ({ children }) => (
+                      <div className=”my-2 pl-3 border-l-2 border-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 rounded-r-xl py-2 pr-3 text-indigo-700 dark:text-indigo-300 text-sm”>
+                        {children}
+                      </div>
+                    ),
+                  }}
+                >
+                  {smartSummary}
+                </ReactMarkdown>
               </div>
             ) : (
-              <p className="text-gray-500">
+              <p className=”text-gray-500”>
                 No summary yet. Click “Refresh” to generate AI insights.
               </p>
             )}
