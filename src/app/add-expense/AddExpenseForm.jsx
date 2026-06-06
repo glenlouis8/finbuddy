@@ -78,17 +78,7 @@ export default function AddExpenseForm() {
           return;
         }
 
-        const { data: signedUrlData, error: signedUrlError } =
-          await supabase.storage
-            .from("receipts")
-            .createSignedUrl(filePath, 60 * 60);
-
-        if (signedUrlError) {
-          setError("Could not generate access URL.");
-          return;
-        }
-
-        receiptUrl = signedUrlData?.signedUrl;
+        receiptUrl = filePath;
       }
 
       if (!amount || !category || !date) {

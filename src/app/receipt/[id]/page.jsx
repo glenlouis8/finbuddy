@@ -10,23 +10,35 @@ export default function ReceiptPage() {
   const { id } = useParams();
   const router = useRouter();
   const [expense, setExpense] = useState(null);
+  const [imageUrl, setImageUrl] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/sign-in"); return; }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { router.push("/sign-in"); return; }
 
       const { data, error } = await supabase
         .from("expenses")
-        .select("id, category, amount, date, receipt_url, ocr_parsed, insights_json")
+        .select("id, category, amount, date, receipt_url, insights_json")
         .eq("id", id)
-        .eq("user_id", user.id)
+        .eq("user_id", session.user.id)
         .single();
 
       if (error || !data) { setError("Receipt not found."); setLoading(false); return; }
+      if (!data.receipt_url) { setError("No receipt image for this expense."); setLoading(false); return; }
+
       setExpense(data);
+
+      // Generate a fresh signed URL server-side
+      const res = await fetch(`/api/receipt-url?id=${id}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json();
+      if (!res.ok || !json.url) { setError("Could not load receipt image."); setLoading(false); return; }
+
+      setImageUrl(json.url);
       setLoading(false);
     }
     load();
@@ -38,9 +50,9 @@ export default function ReceiptPage() {
     </div>
   );
 
-  if (error || !expense?.receipt_url) return (
+  if (error) return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-gray-50 dark:bg-gray-950 text-gray-500">
-      <p>{error || "No receipt image available."}</p>
+      <p>{error}</p>
       <button onClick={() => router.back()} className="text-indigo-500 hover:underline flex items-center gap-1">
         <ArrowLeft className="w-4 h-4" /> Go back
       </button>
@@ -61,7 +73,7 @@ export default function ReceiptPage() {
             <ArrowLeft className="w-4 h-4" /> Back
           </button>
           <a
-            href={expense.receipt_url}
+            href={imageUrl}
             download
             target="_blank"
             rel="noopener noreferrer"
@@ -78,7 +90,7 @@ export default function ReceiptPage() {
           </div>
           <div className="p-4 bg-gray-50 dark:bg-gray-950">
             <img
-              src={expense.receipt_url}
+              src={imageUrl}
               alt={`Receipt from ${storeName}`}
               className="w-full rounded-2xl object-contain"
             />
